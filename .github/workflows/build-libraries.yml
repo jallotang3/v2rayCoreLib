@@ -48,30 +48,16 @@ jobs:
       - name: Build Windows DLL (x64)
         shell: powershell
         run: |
-          $env:CGO_ENABLED = "1"
-          $env:GOOS = "windows"
-          $env:GOARCH = "amd64"
-          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
-          cd bind/desktop
-          go build -buildmode=c-shared -o v2ray-amd64.dll main.go
-
-      - name: Build Windows DLL (x86)
-        shell: powershell
-        run: |
-          $env:CGO_ENABLED = "1"
-          $env:GOOS = "windows"
-          $env:GOARCH = "386"
-          $env:PATH = "C:\msys64\mingw32\bin;$env:PATH"
-          cd bind/desktop
-          go build -buildmode=c-shared -o v2ray-386.dll main.go
+          go install src.techknowlogick.com/xgo@latest
+          xgo --targets=windows -trimpath -ldflags="-w -s"  -buildmode=c-shared ./bind/desktop
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-libraries
           path: |
-            bind/desktop/v2ray-*.dll
-            bind/desktop/v2ray.h
+            bind/desktop/*.dll
+            bind/desktop/*.h
 
   build-macos:
     name: Build macOS dylib
@@ -125,8 +111,9 @@ jobs:
       - name: Set up Android NDK
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r25c
+          ndk-version: r26
           add-to-path: false
+          local-cache: true
 
       - name: Install gomobile
         run: |
@@ -139,23 +126,23 @@ jobs:
           cd bind/mobile
           export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
           export CGO_ENABLED=1
-          export ANDROID_API=21
-          gomobile bind -target=android/arm64 -androidapi=$ANDROID_API -o v2ray-arm64.aar .
+          export ANDROID_API=29
+          gomobile bind -target=android/arm64 -trimpath -ldflags="-w -s" -androidapi=$ANDROID_API -o v2ray-arm64.aar -javapkg cn.jallotang github.com/jallotang3/v2rayCoreLib/bind/mobile
 
       - name: Build Android AAR (AMD64)
         run: |
           cd bind/mobile
           export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
           export CGO_ENABLED=1
-          export ANDROID_API=21
-          gomobile bind -target=android/amd64 -androidapi=$ANDROID_API -o v2ray-amd64.aar .
+          export ANDROID_API=29
+          gomobile bind -target=android/amd64 -trimpath -ldflags="-w -s" -androidapi=$ANDROID_API -o v2ray-amd64.aar -javapkg cn.jallotang github.com/jallotang3/v2rayCoreLib/bind/mobile
 
       - name: Build Android AAR (Universal)
         run: |
           cd bind/mobile
           export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
-          export ANDROID_API=21
-          gomobile bind -target=android -androidapi=$ANDROID_API -o v2ray.aar .
+          export ANDROID_API=29
+          gomobile bind -target=android -trimpath -ldflags="-w -s" -androidapi=$ANDROID_API -o v2ray.aar -javapkg cn.jallotang github.com/jallotang3/v2rayCoreLib/bind/mobile
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
@@ -190,7 +177,7 @@ jobs:
         run: |
           cd bind/mobile
           export CGO_ENABLED=1
-          gomobile bind -target=ios -o V2Ray.framework .
+          gomobile bind -target=ios -trimpath -ldflags="-w -s" -o V2Ray.framework github.com/jallotang3/v2rayCoreLib/bind/mobile
 
       - name: Create XCFramework
         run: |
