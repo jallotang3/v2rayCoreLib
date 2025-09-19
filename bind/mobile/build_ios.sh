@@ -16,31 +16,7 @@ echo "Environment:"
 echo "  CGO_ENABLED = $CGO_ENABLED"
 echo ""
 
-# Build for iOS ARM64 (device)
-echo "Building for iOS ARM64 (device)..."
-gomobile bind -target=ios/arm64 -o V2Ray-arm64.framework .
-
-if [ $? -eq 0 ]; then
-    echo "iOS ARM64 build successful: V2Ray-arm64.framework"
-else
-    echo "iOS ARM64 build failed!"
-    exit 1
-fi
-
-# Build for iOS AMD64 (simulator)
-echo ""
-echo "Building for iOS AMD64 (simulator)..."
-gomobile bind -target=ios/amd64 -o V2Ray-amd64.framework .
-
-if [ $? -eq 0 ]; then
-    echo "iOS AMD64 build successful: V2Ray-amd64.framework"
-else
-    echo "iOS AMD64 build failed!"
-    exit 1
-fi
-
-# Build universal iOS framework
-echo ""
+# Build universal iOS framework directly
 echo "Building universal iOS framework..."
 gomobile bind -target=ios -o V2Ray.framework .
 
@@ -51,25 +27,12 @@ else
     exit 1
 fi
 
-# Create XCFramework
+# Create XCFramework from universal framework
 echo ""
 echo "Creating XCFramework..."
-
-# Check if we have the required frameworks
-if [ ! -d "V2Ray-arm64.framework" ] || [ ! -d "V2Ray-amd64.framework" ]; then
-    echo "Required frameworks not found. Using universal framework only."
-    
-    # Create XCFramework from universal framework
-    xcodebuild -create-xcframework \
-        -framework V2Ray.framework \
-        -output V2Ray.xcframework
-else
-    # Create XCFramework from separate architectures
-    xcodebuild -create-xcframework \
-        -framework V2Ray-arm64.framework \
-        -framework V2Ray-amd64.framework \
-        -output V2Ray.xcframework
-fi
+xcodebuild -create-xcframework \
+    -framework V2Ray.framework \
+    -output V2Ray.xcframework
 
 if [ $? -eq 0 ]; then
     echo "XCFramework created successfully: V2Ray.xcframework"

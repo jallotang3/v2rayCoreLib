@@ -105,17 +105,17 @@ chmod +x build_ios.sh
 3. **Use in Java/Kotlin**:
    ```java
    // Java
-   import main.V2RayService;
+   import v2ray.V2RayService;
    
-   V2RayService service = Main.newV2RayService();
+   V2RayService service = V2ray.newV2RayService();
    String result = service.startWithConfig(configJson);
    ```
    
    ```kotlin
    // Kotlin
-   import main.V2RayService
+   import v2ray.V2RayService
    
-   val service = Main.newV2RayService()
+   val service = V2ray.newV2RayService()
    val result = service.startWithConfig(configJson)
    ```
 

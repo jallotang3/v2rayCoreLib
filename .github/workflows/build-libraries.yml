@@ -176,22 +176,13 @@ jobs:
           go-version-file: ./go.mod
           cache-dependency-path: ./go.sum
 
+      - name: Download dependencies
+        run: go mod download
+
       - name: Install gomobile
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
           gomobile init
-
-      - name: Build iOS Framework (ARM64)
-        run: |
-          cd bind/mobile
-          export CGO_ENABLED=1
-          gomobile bind -target=ios/arm64 -o V2Ray-arm64.framework .
-
-      - name: Build iOS Framework (AMD64 Simulator)
-        run: |
-          cd bind/mobile
-          export CGO_ENABLED=1
-          gomobile bind -target=ios/amd64 -o V2Ray-amd64.framework .
 
       - name: Build iOS Framework (Universal)
         run: |
@@ -203,8 +194,7 @@ jobs:
         run: |
           cd bind/mobile
           xcodebuild -create-xcframework \
-            -framework V2Ray-arm64.framework \
-            -framework V2Ray-amd64.framework \
+            -framework V2Ray.framework \
             -output V2Ray.xcframework
 
       - name: Upload iOS artifacts
