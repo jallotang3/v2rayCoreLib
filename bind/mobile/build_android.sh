@@ -18,12 +18,8 @@ echo ""
 
 # Build for Android ARM64
 echo "Building for Android ARM64..."
-export GOOS=android
-export GOARCH=arm64
-export CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang
-export CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++
-
-gomobile bind -target=android/arm64 -o v2ray-arm64.aar .
+export ANDROID_API=21
+gomobile bind -target=android/arm64 -androidapi=$ANDROID_API -o v2ray-arm64.aar .
 
 if [ $? -eq 0 ]; then
     echo "Android ARM64 build successful: v2ray-arm64.aar"
@@ -35,11 +31,8 @@ fi
 # Build for Android AMD64 (x86_64)
 echo ""
 echo "Building for Android AMD64..."
-export GOARCH=amd64
-export CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang
-export CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++
-
-gomobile bind -target=android/amd64 -o v2ray-amd64.aar .
+export ANDROID_API=21
+gomobile bind -target=android/amd64 -androidapi=$ANDROID_API -o v2ray-amd64.aar .
 
 if [ $? -eq 0 ]; then
     echo "Android AMD64 build successful: v2ray-amd64.aar"
@@ -51,7 +44,8 @@ fi
 # Build universal Android library
 echo ""
 echo "Building universal Android library..."
-gomobile bind -target=android -o v2ray.aar .
+export ANDROID_API=21
+gomobile bind -target=android -androidapi=$ANDROID_API -o v2ray.aar .
 
 if [ $? -eq 0 ]; then
     echo "Universal Android build successful: v2ray.aar"

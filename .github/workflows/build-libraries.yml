@@ -35,6 +35,9 @@ jobs:
           go-version-file: ./go.mod
           cache-dependency-path: ./go.sum
 
+      - name: Download dependencies
+        run: go mod download
+
       - name: Set up MinGW
         uses: msys2/setup-msys2@v2
         with:
@@ -43,6 +46,7 @@ jobs:
           install: mingw-w64-x86_64-gcc
 
       - name: Build Windows DLL (x64)
+        shell: powershell
         run: |
           $env:CGO_ENABLED = "1"
           $env:GOOS = "windows"
@@ -50,9 +54,9 @@ jobs:
           $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
           cd bind/desktop
           go build -buildmode=c-shared -o v2ray-amd64.dll main.go
-        shell: powershell
 
       - name: Build Windows DLL (x86)
+        shell: powershell
         run: |
           $env:CGO_ENABLED = "1"
           $env:GOOS = "windows"
@@ -60,7 +64,6 @@ jobs:
           $env:PATH = "C:\msys64\mingw32\bin;$env:PATH"
           cd bind/desktop
           go build -buildmode=c-shared -o v2ray-386.dll main.go
-        shell: powershell
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -82,6 +85,9 @@ jobs:
         with:
           go-version-file: ./go.mod
           cache-dependency-path: ./go.sum
+
+      - name: Download dependencies
+        run: go mod download
 
       - name: Build macOS dylib
         run: |
@@ -132,28 +138,23 @@ jobs:
           cd bind/mobile
           export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
           export CGO_ENABLED=1
-          export GOOS=android
-          export GOARCH=arm64
-          export CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang
-          export CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++
-          gomobile bind -target=android/arm64 -o v2ray-arm64.aar .
+          export ANDROID_API=21
+          gomobile bind -target=android/arm64 -androidapi=$ANDROID_API -o v2ray-arm64.aar .
 
       - name: Build Android AAR (AMD64)
         run: |
           cd bind/mobile
           export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
           export CGO_ENABLED=1
-          export GOOS=android
-          export GOARCH=amd64
-          export CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang
-          export CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++
-          gomobile bind -target=android/amd64 -o v2ray-amd64.aar .
+          export ANDROID_API=21
+          gomobile bind -target=android/amd64 -androidapi=$ANDROID_API -o v2ray-amd64.aar .
 
       - name: Build Android AAR (Universal)
         run: |
           cd bind/mobile
           export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
-          gomobile bind -target=android -o v2ray.aar .
+          export ANDROID_API=21
+          gomobile bind -target=android -androidapi=$ANDROID_API -o v2ray.aar .
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4

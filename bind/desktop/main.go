@@ -4,12 +4,14 @@ import (
 	"C"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"unsafe"
 
 	core "github.com/v2fly/v2ray-core/v5"
-	"github.com/v2fly/v2ray-core/v5/common/serial"
-	"github.com/v2fly/v2ray-core/v5/infra/conf"
+	"github.com/v2fly/v2ray-core/v5/infra/conf/serial"
+	v4 "github.com/v2fly/v2ray-core/v5/infra/conf/v4"
 	_ "github.com/v2fly/v2ray-core/v5/main/distro/all"
 )
 
@@ -35,8 +37,8 @@ func StartV2Ray(configData *C.char) *C.char {
 		return C.CString("Configuration is empty")
 	}
 
-	// Parse JSON configuration
-	var jsonConfig conf.Config
+	// Parse JSON configuration using v4 config
+	var jsonConfig v4.Config
 	if err := json.Unmarshal([]byte(configStr), &jsonConfig); err != nil {
 		return C.CString(fmt.Sprintf("Failed to parse configuration: %v", err))
 	}
@@ -79,8 +81,15 @@ func StartV2RayWithConfig(configPath *C.char) *C.char {
 		return C.CString("Configuration path is empty")
 	}
 
+	// Open and read the configuration file
+	file, err := os.Open(configPathStr)
+	if err != nil {
+		return C.CString(fmt.Sprintf("Failed to open configuration file: %v", err))
+	}
+	defer file.Close()
+
 	// Load configuration from file
-	config, err := serial.LoadJSONConfig(configPathStr)
+	config, err := serial.LoadJSONConfig(file)
 	if err != nil {
 		return C.CString(fmt.Sprintf("Failed to load configuration: %v", err))
 	}
@@ -204,8 +213,8 @@ func TestV2RayConfig(configData *C.char) *C.char {
 		return C.CString("Configuration is empty")
 	}
 
-	// Parse JSON configuration
-	var jsonConfig conf.Config
+	// Parse JSON configuration using v4 config
+	var jsonConfig v4.Config
 	if err := json.Unmarshal([]byte(configStr), &jsonConfig); err != nil {
 		return C.CString(fmt.Sprintf("Invalid JSON configuration: %v", err))
 	}
@@ -228,13 +237,46 @@ func TestV2RayConfigFile(configPath *C.char) *C.char {
 		return C.CString("Configuration path is empty")
 	}
 
+	// Open and read the configuration file
+	file, err := os.Open(configPathStr)
+	if err != nil {
+		return C.CString(fmt.Sprintf("Failed to open configuration file: %v", err))
+	}
+	defer file.Close()
+
 	// Load configuration from file
-	_, err := serial.LoadJSONConfig(configPathStr)
+	_, err = serial.LoadJSONConfig(file)
 	if err != nil {
 		return C.CString(fmt.Sprintf("Invalid configuration file: %v", err))
 	}
 
 	return C.CString("Configuration file is valid")
+}
+
+// GetConfigTemplate returns a basic configuration template
+//
+//export GetConfigTemplate
+func GetConfigTemplate() *C.char {
+	template := `{
+  "log": {
+    "loglevel": "info"
+  },
+  "inbounds": [
+    {
+      "port": 1080,
+      "protocol": "socks",
+      "settings": {
+        "udp": true
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom"
+    }
+  ]
+}`
+	return C.CString(strings.TrimSpace(template))
 }
 
 func main() {
