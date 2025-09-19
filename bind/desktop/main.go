@@ -1,7 +1,10 @@
 package main
 
+/*
+#include <stdlib.h>
+*/
+import "C"
 import (
-	"C"
 	"encoding/json"
 	"fmt"
 	"os"
