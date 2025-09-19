@@ -131,6 +131,7 @@ jobs:
       - name: Install gomobile
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
+          go get golang.org/x/mobile/bind
           gomobile init
 
       - name: Build Android AAR (ARM64)
@@ -182,6 +183,7 @@ jobs:
       - name: Install gomobile
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
+          go get golang.org/x/mobile/bind
           gomobile init
 
       - name: Build iOS Framework (Universal)
