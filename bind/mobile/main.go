@@ -288,6 +288,92 @@ func (s *V2RayService) GetConfigTemplate() string {
 	return strings.TrimSpace(template)
 }
 
+// Exported functions for gomobile binding
+
+// StartV2Ray starts V2Ray with the given JSON configuration string
+func StartV2Ray(configData string) string {
+	service := NewV2RayService()
+	return service.StartWithConfig(configData)
+}
+
+// StartV2RayWithConfigFile starts V2Ray with the given configuration file path
+func StartV2RayWithConfigFile(configPath string) string {
+	service := NewV2RayService()
+	return service.StartWithConfigFile(configPath)
+}
+
+// StopV2Ray stops the running V2Ray instance
+func StopV2Ray() string {
+	service := NewV2RayService()
+	return service.Stop()
+}
+
+// GetV2RayStatus returns the current status of V2Ray
+func GetV2RayStatus() string {
+	service := NewV2RayService()
+	return service.GetStatus()
+}
+
+// IsV2RayRunning returns true if V2Ray is running, false otherwise
+func IsV2RayRunning() bool {
+	service := NewV2RayService()
+	return service.IsRunning()
+}
+
+// GetV2RayVersion returns the V2Ray version
+func GetV2RayVersion() string {
+	service := NewV2RayService()
+	return service.GetVersion()
+}
+
+// RestartV2Ray restarts V2Ray with new configuration
+func RestartV2Ray(configData string) string {
+	service := NewV2RayService()
+	return service.Restart(configData)
+}
+
+// RestartV2RayWithConfigFile restarts V2Ray with new configuration file
+func RestartV2RayWithConfigFile(configPath string) string {
+	service := NewV2RayService()
+	return service.RestartWithConfigFile(configPath)
+}
+
+// TestV2RayConfig tests if the given configuration is valid
+func TestV2RayConfig(configData string) string {
+	service := NewV2RayService()
+	return service.TestConfig(configData)
+}
+
+// TestV2RayConfigFile tests if the given configuration file is valid
+func TestV2RayConfigFile(configPath string) string {
+	service := NewV2RayService()
+	return service.TestConfigFile(configPath)
+}
+
+// QueryV2RayStats queries statistics for a given tag and name
+func QueryV2RayStats(tag, name string) int64 {
+	service := NewV2RayService()
+	return service.QueryStats(tag, name)
+}
+
+// GetV2RaySystemStats returns system statistics as JSON string
+func GetV2RaySystemStats() string {
+	service := NewV2RayService()
+	return service.GetSystemStats()
+}
+
+// SetV2RayLogLevel sets the log level (0=debug, 1=info, 2=warning, 3=error)
+func SetV2RayLogLevel(level int) string {
+	service := NewV2RayService()
+	return service.SetLogLevel(level)
+}
+
+// GetV2RayConfigTemplate returns a basic configuration template
+func GetV2RayConfigTemplate() string {
+	service := NewV2RayService()
+	return service.GetConfigTemplate()
+}
+
 func main() {
 	// This main function is required but not used in mobile bindings
 }
