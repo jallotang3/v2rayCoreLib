@@ -21,6 +21,16 @@ on:
     types: [published]
   workflow_dispatch:
 
+env:
+  GO_VERSION: '1.21'
+  ANDROID_API: 29
+  NDK_VERSION: r26
+  CGO_ENABLED: 1
+  GO_BUILD_FLAGS: "-trimpath -ldflags=-w -s"
+  XGO_TARGETS_WINDOWS: "windows/amd64,windows/386"
+  XGO_TARGETS_MACOS: "darwin/amd64,darwin/arm64"
+  XGO_TARGETS_LINUX: "linux/amd64,linux/386,linux/arm64,linux/arm"
+
 jobs:
   build-windows:
     name: Build Windows DLL
@@ -35,29 +45,72 @@ jobs:
           go-version-file: ./go.mod
           cache-dependency-path: ./go.sum
 
+      - name: Cache Go modules and build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\go-build
+            ~\go\pkg\mod
+            ~\go\bin
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-${{ hashFiles('bind/desktop/*.go') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-
+            ${{ runner.os }}-go-
+
       - name: Download dependencies
         run: go mod download
 
-      - name: Set up MinGW
+      - name: Set up MinGW for CGO
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
           update: true
-          install: mingw-w64-x86_64-gcc
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-gcc-libs
+
+      - name: Install xgo
+        run: go install src.techknowlogick.com/xgo@latest
 
       - name: Build Windows DLL (x64)
         shell: powershell
         run: |
-          go install src.techknowlogick.com/xgo@latest
-          xgo --targets=windows -trimpath -ldflags="-w -s"  -buildmode=c-shared ./bind/desktop
+          cd bind/desktop
+          $env:CGO_ENABLED = "1"
+          $env:CC = "x86_64-w64-mingw32-gcc"
+          xgo --targets=windows/amd64 -trimpath -ldflags="-w -s" -buildmode=c-shared -out=v2ray-x64 ./
+
+      - name: Build Windows DLL (x86)
+        shell: powershell
+        run: |
+          cd bind/desktop
+          $env:CGO_ENABLED = "1"
+          $env:CC = "i686-w64-mingw32-gcc"
+          xgo --targets=windows/386 -trimpath -ldflags="-w -s" -buildmode=c-shared -out=v2ray-x86 ./
+          
+      - name: Verify build artifacts
+        shell: powershell
+        run: |
+          cd bind/desktop
+          $artifacts = @("v2ray-x64-windows-amd64.dll", "v2ray-x86-windows-386.dll", "v2ray.h")
+          foreach ($artifact in $artifacts) {
+            if (!(Test-Path $artifact)) {
+              Write-Error "Artifact not found: $artifact"
+              exit 1
+            }
+          }
+          Write-Host "Build artifacts verified successfully"
+          Get-ChildItem -Name "v2ray*" | ForEach-Object { 
+            $size = [math]::Round((Get-Item $_).Length / 1MB, 2)
+            Write-Host "$_ ($size MB)"
+          }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-libraries
           path: |
-            bind/desktop/*.dll
-            bind/desktop/*.h
+            bind/desktop/v2ray-x64-windows-amd64.dll
+            bind/desktop/v2ray-x86-windows-386.dll
+            bind/desktop/v2ray.h
 
   build-macos:
     name: Build macOS dylib
@@ -72,21 +125,141 @@ jobs:
           go-version-file: ./go.mod
           cache-dependency-path: ./go.sum
 
+      - name: Cache Go modules and build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/go-build
+            ~/go/pkg/mod
+            ~/go/bin
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-${{ hashFiles('bind/desktop/*.go') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-
+            ${{ runner.os }}-go-
+
       - name: Download dependencies
         run: go mod download
 
-      - name: Build macOS dylib
+      - name: Install xgo
+        run: go install src.techknowlogick.com/xgo@latest
+
+      - name: Build macOS dylib (Intel)
         run: |
           cd bind/desktop
-          chmod +x build_macos.sh
-          ./build_macos.sh
+          export CGO_ENABLED=1
+          xgo --targets=darwin/amd64 -trimpath -ldflags="-w -s" -buildmode=c-shared -out=v2ray-intel ./
+
+      - name: Build macOS dylib (Apple Silicon)
+        run: |
+          cd bind/desktop
+          export CGO_ENABLED=1
+          xgo --targets=darwin/arm64 -trimpath -ldflags="-w -s" -buildmode=c-shared -out=v2ray-arm64 ./
+
+      - name: Create Universal Binary
+        run: |
+          cd bind/desktop
+          lipo -create -output v2ray.dylib v2ray-intel-darwin-amd64.dylib v2ray-arm64-darwin-arm64.dylib
+          echo "Universal binary created successfully"
+          file v2ray.dylib
+          lipo -info v2ray.dylib
+
+      - name: Verify macOS build artifacts
+        run: |
+          cd bind/desktop
+          ls -la v2ray*.dylib v2ray.h
+          echo "File sizes:"
+          du -h v2ray*.dylib
+          echo "Architecture info:"
+          lipo -info v2ray.dylib
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-libraries
           path: |
-            bind/desktop/v2ray*.dylib
+            bind/desktop/v2ray.dylib
+            bind/desktop/v2ray-intel-darwin-amd64.dylib
+            bind/desktop/v2ray-arm64-darwin-arm64.dylib
+            bind/desktop/v2ray.h
+
+  build-linux:
+    name: Build Linux Shared Libraries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ./go.mod
+          cache-dependency-path: ./go.sum
+
+      - name: Cache Go modules and build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/go/bin
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-${{ hashFiles('bind/desktop/*.go') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib g++-multilib
+
+      - name: Install xgo
+        run: go install src.techknowlogick.com/xgo@latest
+
+      - name: Build Linux x64
+        run: |
+          cd bind/desktop
+          export CGO_ENABLED=1
+          xgo --targets=linux/amd64 -trimpath -ldflags="-w -s" -buildmode=c-shared -out=v2ray-x64 ./
+
+      - name: Build Linux x86
+        run: |
+          cd bind/desktop
+          export CGO_ENABLED=1
+          xgo --targets=linux/386 -trimpath -ldflags="-w -s" -buildmode=c-shared -out=v2ray-x86 ./
+
+      - name: Build Linux ARM64
+        run: |
+          cd bind/desktop
+          export CGO_ENABLED=1
+          xgo --targets=linux/arm64 -trimpath -ldflags="-w -s" -buildmode=c-shared -out=v2ray-arm64 ./
+
+      - name: Build Linux ARM
+        run: |
+          cd bind/desktop
+          export CGO_ENABLED=1
+          xgo --targets=linux/arm -trimpath -ldflags="-w -s" -buildmode=c-shared -out=v2ray-arm ./
+
+      - name: Verify Linux build artifacts
+        run: |
+          cd bind/desktop
+          ls -la v2ray-*-linux-*.so v2ray.h
+          echo "File sizes:"
+          du -h v2ray-*-linux-*.so
+          echo "Architecture info:"
+          file v2ray-*-linux-*.so
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-libraries
+          path: |
+            bind/desktop/v2ray-x64-linux-amd64.so
+            bind/desktop/v2ray-x86-linux-386.so
+            bind/desktop/v2ray-arm64-linux-arm64.so
+            bind/desktop/v2ray-arm-linux-arm.so
             bind/desktop/v2ray.h
 
   build-android:
@@ -197,7 +370,7 @@ jobs:
   create-release-package:
     name: Create Release Package
     runs-on: ubuntu-latest
-    needs: [build-windows, build-macos, build-android, build-ios]
+    needs: [build-windows, build-macos, build-linux, build-android, build-ios]
     if: github.event_name == 'release'
     steps:
       - name: Checkout code
@@ -212,6 +385,7 @@ jobs:
         run: |
           mkdir -p release-package/windows
           mkdir -p release-package/macos
+          mkdir -p release-package/linux
           mkdir -p release-package/android
           mkdir -p release-package/ios
           mkdir -p release-package/docs
@@ -223,6 +397,9 @@ jobs:
           
           # macOS
           cp artifacts/macos-libraries/* release-package/macos/ || true
+          
+          # Linux
+          cp artifacts/linux-libraries/* release-package/linux/ || true
           
           # Android
           cp artifacts/android-libraries/* release-package/android/ || true
@@ -255,7 +432,7 @@ jobs:
   upload-artifacts:
     name: Upload Build Artifacts
     runs-on: ubuntu-latest
-    needs: [build-windows, build-macos, build-android, build-ios]
+    needs: [build-windows, build-macos, build-linux, build-android, build-ios]
     if: github.event_name != 'release'
     steps:
       - name: Download all artifacts
@@ -267,12 +444,14 @@ jobs:
         run: |
           mkdir -p combined-libraries/windows
           mkdir -p combined-libraries/macos
+          mkdir -p combined-libraries/linux
           mkdir -p combined-libraries/android
           mkdir -p combined-libraries/ios
           
           # Copy all artifacts to combined directory
           cp artifacts/windows-libraries/* combined-libraries/windows/ || true
           cp artifacts/macos-libraries/* combined-libraries/macos/ || true
+          cp artifacts/linux-libraries/* combined-libraries/linux/ || true
           cp artifacts/android-libraries/* combined-libraries/android/ || true
           cp -r artifacts/ios-libraries/* combined-libraries/ios/ || true
 
