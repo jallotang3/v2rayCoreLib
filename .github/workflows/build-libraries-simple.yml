@@ -302,7 +302,7 @@ jobs:
           fi
           
           echo "Building $outputName for target $target..."
-          gomobile bind -target=$target -trimpath -ldflags="-w -s" -androidapi=$ANDROID_API -o $outputName -javapkg cn.jallotang main.go
+          gomobile bind -target=$target -trimpath -ldflags="-w -s" -androidapi=$ANDROID_API -o $outputName -javapkg cn.jallotang github.com/jallotang3/v2rayCoreLib/bind/mobile
           
           if [ ! -f "$outputName" ]; then
             echo "❌ Build failed: $outputName not found"
@@ -362,7 +362,7 @@ jobs:
           cd bind/mobile
           export CGO_ENABLED=1
           echo "Building iOS XCFramework..."
-          gomobile bind -target=ios -trimpath -ldflags="-w -s" -o V2Ray.xcframework main.go
+          gomobile bind -target=ios -trimpath -ldflags="-w -s" -o V2Ray.xcframework github.com/jallotang3/v2rayCoreLib/bind/mobile
           
           if [ ! -d "V2Ray.xcframework" ]; then
             echo "❌ Build failed: V2Ray.xcframework not found"
