@@ -8,7 +8,7 @@ on:
       - "**/*.go"
       - "go.mod"
       - "go.sum"
-      - ".github/workflows/build-libraries.yml"
+      - ".github/workflows/build-libraries*.yml"
   pull_request:
     branches: [master, main]
     paths:
@@ -16,7 +16,7 @@ on:
       - "**/*.go"
       - "go.mod"
       - "go.sum"
-      - ".github/workflows/build-libraries.yml"
+      - ".github/workflows/build-libraries*.yml"
   release:
     types: [published]
   workflow_dispatch:
@@ -31,19 +31,12 @@ on:
         required: false
         default: true
         type: boolean
-      build_linux:
-        description: 'Build Linux libraries'
-        required: false
-        default: true
-        type: boolean
 
 env:
   GO_VERSION: '1.21'
   ANDROID_API: 29
   NDK_VERSION: r26
   CGO_ENABLED: 1
-  GO_BUILD_FLAGS: "-trimpath -ldflags=-w -s -buildvcs=false"
-  BUILD_TIMEOUT: 30m
 
 jobs:
   # 准备阶段 - 下载依赖和设置环境
@@ -121,7 +114,7 @@ jobs:
           $env:GOARCH = "${{ matrix.arch }}"
           $outputName = "v2ray-${{ matrix.arch }}-windows-${{ matrix.arch }}.dll"
           Write-Host "Building $outputName..."
-          go build ${{ env.GO_BUILD_FLAGS }} -buildmode=c-shared -o $outputName main.go
+          go build -trimpath -ldflags="-w -s" -buildmode=c-shared -o $outputName main.go
           
           if (!(Test-Path $outputName)) {
             Write-Error "Build failed: $outputName not found"
@@ -183,7 +176,7 @@ jobs:
           export GOARCH=${{ matrix.arch }}
           outputName="v2ray-${{ matrix.arch }}-darwin-${{ matrix.arch }}.dylib"
           echo "Building $outputName..."
-          go build ${{ env.GO_BUILD_FLAGS }} -buildmode=c-shared -o $outputName main.go
+          go build -trimpath -ldflags="-w -s" -buildmode=c-shared -o $outputName main.go
           
           if [ ! -f "$outputName" ]; then
             echo "❌ Build failed: $outputName not found"
@@ -242,16 +235,16 @@ jobs:
             bind/desktop/v2ray.h
           retention-days: 30
 
-  # Linux 构建 - 使用矩阵构建
-  build-linux:
-    name: Build Linux Shared Library (${{ matrix.arch }})
+  # Android 构建 - 使用矩阵构建
+  build-android:
+    name: Build Android AAR (${{ matrix.target }})
     runs-on: ubuntu-latest
     needs: prepare
-    if: ${{ github.event.inputs.build_linux != 'false' }}
+    if: ${{ github.event.inputs.build_mobile != 'false' }}
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, 386, arm64, arm]
+        target: [arm64, amd64, universal]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -269,60 +262,9 @@ jobs:
             ~/.cache/go-build
             ~/go/pkg/mod
             ~/go/bin
-          key: ${{ needs.prepare.outputs.cache-key }}-linux
+          key: ${{ needs.prepare.outputs.cache-key }}-android
           restore-keys: |
             ${{ needs.prepare.outputs.cache-key }}-
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-multilib g++-multilib
-
-      - name: Install xgo
-        run: go install src.techknowlogick.com/xgo@latest
-
-      - name: Build Linux Shared Library (${{ matrix.arch }})
-        timeout-minutes: 20
-        run: |
-          cd bind/desktop
-          export CGO_ENABLED=1
-          outputName="v2ray-${{ matrix.arch }}-linux-${{ matrix.arch }}.so"
-          echo "Building $outputName..."
-          xgo --docker-image=techknowlogick/xgo:latest --targets=linux/${{ matrix.arch }} ${{ env.GO_BUILD_FLAGS }} -buildmode=c-shared -out=v2ray-${{ matrix.arch }} ./
-          
-          if [ ! -f "$outputName" ]; then
-            echo "❌ Build failed: $outputName not found"
-            exit 1
-          fi
-          
-          size=$(du -h "$outputName" | cut -f1)
-          echo "✅ $outputName built successfully ($size)"
-          file "$outputName"
-
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-${{ matrix.arch }}-library
-          path: |
-            bind/desktop/v2ray-${{ matrix.arch }}-linux-${{ matrix.arch }}.so
-            bind/desktop/v2ray.h
-          retention-days: 30
-
-  build-android:
-    name: Build Android AAR
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: ./go.mod
-          cache-dependency-path: ./go.sum
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -343,39 +285,47 @@ jobs:
           go get golang.org/x/mobile/bind
           gomobile init
 
-      - name: Build Android AAR (ARM64)
+      - name: Build Android AAR (${{ matrix.target }})
+        timeout-minutes: 25
         run: |
           cd bind/mobile
           export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
           export CGO_ENABLED=1
           export ANDROID_API=29
-          gomobile bind -target=android/arm64 -trimpath -ldflags="-w -s" -androidapi=$ANDROID_API -o v2ray-arm64.aar -javapkg cn.jallotang github.com/jallotang3/v2rayCoreLib/bind/mobile
-
-      - name: Build Android AAR (AMD64)
-        run: |
-          cd bind/mobile
-          export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
-          export CGO_ENABLED=1
-          export ANDROID_API=29
-          gomobile bind -target=android/amd64 -trimpath -ldflags="-w -s" -androidapi=$ANDROID_API -o v2ray-amd64.aar -javapkg cn.jallotang github.com/jallotang3/v2rayCoreLib/bind/mobile
-
-      - name: Build Android AAR (Universal)
-        run: |
-          cd bind/mobile
-          export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
-          export ANDROID_API=29
-          gomobile bind -target=android -trimpath -ldflags="-w -s" -androidapi=$ANDROID_API -o v2ray.aar -javapkg cn.jallotang github.com/jallotang3/v2rayCoreLib/bind/mobile
+          
+          if [ "${{ matrix.target }}" = "universal" ]; then
+            target="android"
+            outputName="v2ray.aar"
+          else
+            target="android/${{ matrix.target }}"
+            outputName="v2ray-${{ matrix.target }}.aar"
+          fi
+          
+          echo "Building $outputName for target $target..."
+          gomobile bind -target=$target -trimpath -ldflags="-w -s" -androidapi=$ANDROID_API -o $outputName -javapkg cn.jallotang github.com/jallotang3/v2rayCoreLib/bind/mobile
+          
+          if [ ! -f "$outputName" ]; then
+            echo "❌ Build failed: $outputName not found"
+            exit 1
+          fi
+          
+          size=$(du -h "$outputName" | cut -f1)
+          echo "✅ $outputName built successfully ($size)"
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: android-libraries
+          name: android-${{ matrix.target }}-library
           path: |
             bind/mobile/v2ray*.aar
+          retention-days: 30
 
+  # iOS 构建
   build-ios:
     name: Build iOS XCFramework
     runs-on: macos-latest
+    needs: prepare
+    if: ${{ github.event.inputs.build_mobile != 'false' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -385,6 +335,17 @@ jobs:
         with:
           go-version-file: ./go.mod
           cache-dependency-path: ./go.sum
+
+      - name: Cache Go modules and build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/go-build
+            ~/go/pkg/mod
+            ~/go/bin
+          key: ${{ needs.prepare.outputs.cache-key }}-ios
+          restore-keys: |
+            ${{ needs.prepare.outputs.cache-key }}-
 
       - name: Download dependencies
         run: go mod download
@@ -396,22 +357,34 @@ jobs:
           gomobile init
 
       - name: Build iOS Framework (Universal)
+        timeout-minutes: 20
         run: |
           cd bind/mobile
           export CGO_ENABLED=1
+          echo "Building iOS XCFramework..."
           gomobile bind -target=ios -trimpath -ldflags="-w -s" -o V2Ray.xcframework github.com/jallotang3/v2rayCoreLib/bind/mobile
+          
+          if [ ! -d "V2Ray.xcframework" ]; then
+            echo "❌ Build failed: V2Ray.xcframework not found"
+            exit 1
+          fi
+          
+          size=$(du -sh "V2Ray.xcframework" | cut -f1)
+          echo "✅ V2Ray.xcframework built successfully ($size)"
 
       - name: Upload iOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ios-libraries
+          name: ios-library
           path: |
             bind/mobile/V2Ray.xcframework
+          retention-days: 30
 
+  # 创建发布包
   create-release-package:
     name: Create Release Package
     runs-on: ubuntu-latest
-    needs: [build-windows, build-macos, build-linux, build-android, build-ios]
+    needs: [build-windows, build-macos, create-macos-universal, build-android, build-ios]
     if: github.event_name == 'release'
     steps:
       - name: Checkout code
@@ -426,7 +399,6 @@ jobs:
         run: |
           mkdir -p release-package/windows
           mkdir -p release-package/macos
-          mkdir -p release-package/linux
           mkdir -p release-package/android
           mkdir -p release-package/ios
           mkdir -p release-package/docs
@@ -434,23 +406,23 @@ jobs:
       - name: Organize artifacts
         run: |
           # Windows
-          cp artifacts/windows-libraries/* release-package/windows/ || true
+          cp artifacts/windows-*/v2ray-*.dll release-package/windows/ || true
+          cp artifacts/windows-*/v2ray.h release-package/windows/ || true
           
           # macOS
-          cp artifacts/macos-libraries/* release-package/macos/ || true
-          
-          # Linux
-          cp artifacts/linux-libraries/* release-package/linux/ || true
+          cp artifacts/macos-universal-library/v2ray.dylib release-package/macos/ || true
+          cp artifacts/macos-*/v2ray-*.dylib release-package/macos/ || true
+          cp artifacts/macos-*/v2ray.h release-package/macos/ || true
           
           # Android
-          cp artifacts/android-libraries/* release-package/android/ || true
+          cp artifacts/android-*/v2ray*.aar release-package/android/ || true
           
           # iOS
-          cp -r artifacts/ios-libraries/* release-package/ios/ || true
+          cp -r artifacts/ios-library/V2Ray.xcframework release-package/ios/ || true
           
           # Documentation
-          cp bind/desktop/README.md release-package/docs/desktop-README.md
-          cp bind/mobile/README.md release-package/docs/mobile-README.md
+          cp bind/desktop/README.md release-package/docs/desktop-README.md || true
+          cp bind/mobile/README.md release-package/docs/mobile-README.md || true
 
       - name: Create release archive
         run: |
@@ -470,10 +442,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # 上传构建产物
   upload-artifacts:
     name: Upload Build Artifacts
     runs-on: ubuntu-latest
-    needs: [build-windows, build-macos, build-linux, build-android, build-ios]
+    needs: [build-windows, build-macos, create-macos-universal, build-android, build-ios]
     if: github.event_name != 'release'
     steps:
       - name: Download all artifacts
@@ -485,16 +458,20 @@ jobs:
         run: |
           mkdir -p combined-libraries/windows
           mkdir -p combined-libraries/macos
-          mkdir -p combined-libraries/linux
           mkdir -p combined-libraries/android
           mkdir -p combined-libraries/ios
           
           # Copy all artifacts to combined directory
-          cp artifacts/windows-libraries/* combined-libraries/windows/ || true
-          cp artifacts/macos-libraries/* combined-libraries/macos/ || true
-          cp artifacts/linux-libraries/* combined-libraries/linux/ || true
-          cp artifacts/android-libraries/* combined-libraries/android/ || true
-          cp -r artifacts/ios-libraries/* combined-libraries/ios/ || true
+          cp artifacts/windows-*/v2ray-*.dll combined-libraries/windows/ || true
+          cp artifacts/windows-*/v2ray.h combined-libraries/windows/ || true
+          
+          cp artifacts/macos-universal-library/v2ray.dylib combined-libraries/macos/ || true
+          cp artifacts/macos-*/v2ray-*.dylib combined-libraries/macos/ || true
+          cp artifacts/macos-*/v2ray.h combined-libraries/macos/ || true
+          
+          cp artifacts/android-*/v2ray*.aar combined-libraries/android/ || true
+          
+          cp -r artifacts/ios-library/V2Ray.xcframework combined-libraries/ios/ || true
 
       - name: Upload combined artifacts
         uses: actions/upload-artifact@v4
